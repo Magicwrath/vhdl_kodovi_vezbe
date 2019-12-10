@@ -49,6 +49,7 @@ entity booth_multiplier is
 end booth_multiplier;
 
 architecture Behavioral of booth_multiplier is
+  signal add_out               : unsigned(16 downto 0);
   signal a_in_comp             : unsigned(7 downto 0);
   signal not_a                 : unsigned(7 downto 0);
   type fsm_state_t is (idle, op);
@@ -78,24 +79,28 @@ begin
     end if;
   end process registers;
 
-  comb_logic : process (a_in, b_in, start, i_next, i_reg, a_next, a_reg, s_next, s_reg, p_next, p_reg, state_reg, state_next, temp_reg, temp_next) is
+  comb_logic : process (a_in, b_in, start, i_next, i_reg, a_next, a_reg, s_next, s_reg, p_next, p_reg, state_reg, state_next, temp_reg, temp_next, a_in_comp) is
   begin  -- process comb_logic
-    a_next <= a_reg;
-    s_next <= s_reg;
-    p_next <= p_reg;
-    i_next <= i_reg;
-    temp_next <= temp_reg;
-    ready <= '0';
+    -- Defaults
+    a_next     <= a_reg;
+    s_next     <= s_reg;
+    p_next     <= p_reg;
+    i_next     <= i_reg;
+    temp_next  <= temp_reg;
+    state_next <= state_reg;
+    ready      <= '0';
+
     case state_reg is
       when idle =>
         ready     <= '1';
         a_next    <= unsigned(a_in) & "000000000";
         s_next    <= a_in_comp(7 downto 0) & "000000000";
-        p_next    <= "00000000" & unsigned(b_in) & "0";
+        p_next    <= p_reg;  --Mora se odraditi radi ocuvanja rezultata
         i_next    <= (others => '0');
         temp_next <= (others => '0');
         if (start = '1') then
           state_next <= op;
+          p_next     <= "00000000" & unsigned(b_in) & '0';  --Mora se odraditi ovde radi ocuvanja rezultata
         else
           state_next <= idle;
         end if;
@@ -105,14 +110,14 @@ begin
           when "00" =>
             temp_next <= p_reg;
           when "01" =>
-            temp_next <= p_reg + a_reg;
+            temp_next <= p_reg + add_out;
           when "10" =>
-            temp_next <= p_reg + s_reg;
+            temp_next <= p_reg + add_out;
           when others =>
             temp_next <= p_reg;
         end case;
 
-        p_next <= temp_next(0) & temp_next(16 downto 1);  -- arithmetic shift right
+        p_next <= temp_next(16) & temp_next(16 downto 1);  -- arithmetic shift right
         i_next <= i_reg + 1;
         if (i_next = to_unsigned(8, i_next'length)) then
           state_next <= idle;
@@ -123,8 +128,15 @@ begin
 
   end process comb_logic;
 
-  res <= std_logic_vector(p_reg(16 downto 1));
-  not_a <= unsigned (not a_in);
+  res       <= std_logic_vector(p_reg(16 downto 1));
+  not_a     <= unsigned (not a_in);
   a_in_comp <= (not_a + 1);
+
+  --Adder for state OP / Resource sharing
+  with p_reg(0) select
+    add_out <=
+    a_reg when '1',
+    s_reg when others;
+
 
 end Behavioral;
