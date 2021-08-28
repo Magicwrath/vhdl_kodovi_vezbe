@@ -156,4 +156,8 @@ begin
   adder_out_s      <= left_reg + right_reg;
   -- comparator
   left_lte_right_s <= '1' when left_next <= right_next else '0';
+
+  -- output connections
+  pos_out <= pos_reg;
+  el_found_out <= el_found_reg;
 end architecture beh;
