@@ -38,6 +38,7 @@ architecture beh of binary_search is
   -- Registers
   signal state_reg, state_next       : fsm_state_t;
   signal n_reg, n_next               : unsigned(7 downto 0);
+  signal key_reg, key_next           : unsigned(7 downto 0);
   signal middle_reg, middle_next     : unsigned(7 downto 0);
   signal left_reg, left_next         : unsigned(7 downto 0);
   signal right_reg, right_next       : unsigned(7 downto 0);
@@ -50,7 +51,7 @@ architecture beh of binary_search is
   signal left_lte_right_s : std_logic;
 begin
   -- synchronous RAM write process
-  write_ram : process (clk) is
+  write_ram : process (clk)
   begin  -- process write_ram
     if clk'event and clk = '1' then
       if(rw_in_s = '1') then
@@ -62,13 +63,17 @@ begin
   -- asynchronous RAM read
   mem_data_out_s <= ram_mem_s(to_integer(unsigned(addr_in_s))) when rw_in_s = '0' else
                     (others => '0');
-
+  -- RAM connections
+  mem_data_in_s <= arr_data_in;
+  rw_in_s <= arr_write;
+  
   -- sequential logic
-  ram_process : process (clk, rst) is
+  ram_process : process (clk, rst)
   begin  -- process ram_process
     if rst = '0' then                   -- asynchronous reset (active low)
       state_reg    <= idle;
       n_reg        <= (others => '0');
+      key_reg      <= (others => '0');
       middle_reg   <= (others => '0');
       left_reg     <= (others => '0');
       right_reg    <= (others => '0');
@@ -77,6 +82,7 @@ begin
     elsif clk'event and clk = '1' then  -- rising clock edge
       state_reg    <= state_next;
       n_reg        <= n_next;
+      key_reg      <= key_next;
       middle_reg   <= middle_next;
       left_reg     <= left_next;
       right_reg    <= right_next;
@@ -86,21 +92,20 @@ begin
   end process ram_process;
 
   -- combinational logic
-  comb_logic : process (start, arr_write) is
+  comb_logic : process (start, arr_write, left_in, right_in, key_in, arr_data_in, adder_out_s, state_next, state_reg,
+    n_reg, n_next, key_reg, key_next, left_reg, left_next, right_reg, right_next, pos_reg, pos_next, middle_reg, middle_next,
+    addr_in_s, rw_in_s, left_lte_right_s, el_found_reg, el_found_next, ram_mem_s, mem_data_out_s)
   begin  -- process comb_logic
     -- Defaults
     n_next        <= n_reg;
     middle_next   <= middle_reg;
+    key_next      <= key_reg;
     right_next    <= right_reg;
     left_next     <= left_reg;
     state_next    <= state_reg;
     pos_next      <= pos_reg;
     el_found_next <= el_found_reg;
     ready         <= '0';
-    el_found_out  <= '0';
-    pos_out       <= (others => '0');
-    rw_in_s       <= '0';
-    mem_data_in_s <= (others => '0');
     addr_in_s     <= (others => '0');
 
     -- states
@@ -110,27 +115,25 @@ begin
 
         if (arr_write = '1') then
           -- write into RAM
-          addr_in_s     <= n_reg;
-          n_next        <= n_reg + 1;
-          rw_in_s       <= '1';
-          mem_data_in_s <= arr_data_in;
+          addr_in_s     <= std_logic_vector(n_reg);
+          n_next        <= n_reg + to_unsigned(1, n_reg'length);
         elsif (start = '1') then
           n_next     <= (others => '0');
-          left_next  <= left_in;
-          right_next <= right_in;
-          key_next   <= key_in;
+          left_next  <= unsigned(left_in);
+          right_next <= unsigned(right_in);
+          key_next   <= unsigned(key_in);
           state_next <= search;
         end if;
 
       when search =>
         middle_next <= '0' & adder_out_s(7 downto 1);
-        addr_in_s   <= middle_next;
+        addr_in_s   <= std_logic_vector(middle_next);
 
-        if (mem_data_out_s = key_reg) then
-          pos_next      <= key_reg;
+        if (mem_data_out_s = std_logic_vector(key_reg)) then
+          pos_next      <= middle_next;
           state_next    <= idle;
           el_found_next <= '1';
-        elsif (mem_data_out_s > key_reg) then
+        elsif (mem_data_out_s > std_logic_vector(key_reg)) then
           right_next <= middle_next - 1;
 
           if (left_lte_right_s = '1') then
@@ -158,6 +161,6 @@ begin
   left_lte_right_s <= '1' when left_next <= right_next else '0';
 
   -- output connections
-  pos_out <= pos_reg;
+  pos_out <= std_logic_vector(pos_reg);
   el_found_out <= el_found_reg;
 end architecture beh;
